@@ -1,0 +1,37 @@
+html {
+  box-sizing: border-box;
+}
+
+*,
+*:after,
+*::before {
+  box-sizing: inherit;
+}
+
+.main {
+  display: flex;
+  flex-flow: column wrap;
+  justify-content: center;
+  align-items: center;
+}
+fw-text#titleActiveOff {
+  font-size: 1.1rem !important; /* h1 size */
+  font-weight: bold !important;
+  color: #666 !important; 
+}
+
+fw-text#titleActiveOn {
+  font-size: 1.1rem !important; /* h2 size */
+  font-weight: bold !important;
+  color: #666 !important; 
+}
+
+fw-text#heading{
+  font-size: 1.3rem !important;
+  font-weight: bold !important;
+  color: #666 !important; 
+
+}
+fw-custom-cell-anchor{
+  width: 100%;
+}

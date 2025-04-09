@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>A Template App</title>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Freshworks Crayons (CDN) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@freshworks/crayons@v4/dist/crayons/crayons.css">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@freshworks/crayons@v4/dist/crayons/crayons.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@freshworks/crayons@v4/dist/crayons/crayons.js"></script>
+
+    <!-- Local Styles -->
+    <link rel="stylesheet" type="text/css" href="styles/style.css" />
+
+    <!-- Freshworks App SDK -->
+    <script async src="{{{appclient}}}"></script>
+  </head>
+
+  <body>
+    <fw-text id="heading" >Enter Freshdesk Details</fw-text >
+
+      <br><br>
+
+    <!-- Domain Input -->
+    <fw-input 
+      label="Domain" 
+      placeholder="Enter your Domain (without freshdesk.com)" 
+      required 
+      clear-input 
+      type="text" 
+      id="domain" 
+      value="utchikannaneelakandan1">
+    </fw-input>
+
+    <br>
+
+    <!-- API Key Input -->
+    <fw-input 
+      label="API Key" 
+      error-text="API Key is incorrect" 
+      required 
+      clear-input 
+      id="api_key" 
+      value="WtCtXxwh9lacSKG7GBGr">
+    </fw-input>
+
+    <br>
+
+    <!-- Buttons -->
+    <fw-button color="primary" onclick="fetchAutomations()">Fetch Automations</fw-button>
+    <fw-button color="primary" id="turnOffBtn" disabled onclick="turnOffAll()">Turn Off All</fw-button>
+    <br><br>
+
+    <!-- Titles -->
+    <fw-text id="titleActiveOff" style="display: none;">Active Automation Rules</fw-text>
+    <fw-text id="titleActiveOn" style="display: none;">This account already has automations disabled. Please find the list below and turn them on.</fw-text>
+
+    <br>
+
+    <!-- Automation List -->
+    <div id="automation-list"></div>
+  </body>
+
+  <!-- Local Scripts -->
+  <script defer src="scripts/app.js"></script>
+</html>

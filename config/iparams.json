@@ -1,0 +1,12 @@
+{
+  "api_key": {
+    "display_name": "api_key",
+    "description": "Please enter your api_key",
+    "type": "text",
+    "secure": true,
+    "required": true,
+    "modules": [
+      "support_ticket"
+    ]
+  }
+}

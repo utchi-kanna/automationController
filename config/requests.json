@@ -1,0 +1,45 @@
+  {
+    "getAutomations": {
+      "schema": {
+        "method": "GET",
+        "host": "<%= current_host.endpoint_urls.freshdesk %>",
+        "path": "/api/v2/automations/<%= context.automation_type %>/rules?per_page=100",
+        "headers": {
+          "Authorization": "Basic <%= encode(iparam.api_key + ':X') %>",
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    "offAutomations": {
+      "schema": {
+        "method": "PUT",
+        "host": "<%= current_host.endpoint_urls.freshdesk %>",
+        "path": "/api/v2/automations/<%= context.automation_type %>/rules/<%= context.rule_id %>",
+        "headers": {
+          "Authorization": "Basic <%= encode(iparam.api_key + ':X') %>",
+          "Content-Type": "application/json"
+        }
+      },
+      "options": {
+        "maxAttempts": 3,
+        "retryDelay": 1000
+      }
+    }
+    ,
+    "onAutomations": {
+      "schema": {
+        "method": "PUT",
+        "host": "<%= current_host.endpoint_urls.freshdesk %>",
+        "path": "/api/v2/automations/<%= context.automation_type %>/rules/<%= context.rule_id %>",
+        "headers": {
+          "Authorization": "Basic <%= encode(iparam.api_key + ':X') %>",
+          "Content-Type": "application/json"
+        }
+      },
+      "options": {
+        "maxAttempts": 3,
+        "retryDelay": 1000
+      }
+    }
+  }
+  
