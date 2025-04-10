@@ -50,19 +50,38 @@ function fetchAutomations() {
                     columns: [
                         {
                             key: "number",
-                            text: "#",
+                            text: "No",
                             position: 1,
                             width: "10%"
                         },
                         {
                             key: "name",
-                            text: "Automations",
+                            text: "Automation Name",
                             position: 2,
                             variant: "anchor",
-                            width: "70%",          // A reasonable width
-                            wrapText: true,        // Allow wrapping
-                            truncate: false,       // Avoid ellipsis
-                            resizable: true    
+                            width: "35%",  
+                            truncate: false,  
+                            wrapText: true
+                        },
+                        {
+                            key: "type",
+                            text: "Type",
+                            position: 3,
+                            width: "15%"
+                        },
+                        {
+                            key: "description",
+                            text: "Description",
+                            position: 4,
+                            width: "25%",
+                            truncate: false,
+                            wrapText: true
+                        },
+                        {
+                            key: "last_modified",
+                            text: "Last Modified",
+                            position: 5,
+                            width: "15%"
                         }
                     ],
                     rows: []
@@ -78,7 +97,11 @@ function fetchAutomations() {
                                 text: rule.name,
                                 href: `https://${domain}.freshdesk.com/a/admin/automations/${rule.type_name}/${rule.id}/edit`,
                                 target: "_blank"
-                            }
+                            },
+                            type: rule.type_name,
+                            status: rule.status ? "Active" : "Inactive",
+                            description: rule.description || "No description available",
+                            last_modified: rule.updated_at ? new Date(rule.updated_at).toLocaleDateString() : "N/A"
                         };
                         col.rows.push(row);
                         hasInactiveRules = true;
@@ -94,7 +117,7 @@ function fetchAutomations() {
                     message.style.display = "none";
                     client.interface.trigger("showNotify", {
                         type: "info",
-                        message: "Automations checked & none disabled for this account. History has also been removed. Please try now."
+                        message: "Automations checked—none disabled for this account. History has also been removed. Please try now."
                     });
 
                     client.db.delete("automation_rules")
@@ -122,29 +145,47 @@ function fetchAutomations() {
 
       const dataTable = document.createElement("fw-data-table");
       dataTable.columns = [
-        {
-          key: "number",
-          text: "#",
-          position: 1,
-          width: "10%"
-        },
-        {
-          key: "name",
-          text: "Automation Rule Name",
-          position: 2,
-          variant: "anchor",
-          width: "70%",          // A reasonable width
-          wrapText: true,        // Allow wrapping
-          truncate: false,       // Avoid ellipsis
-          resizable: true        // Optional: allow column resize
-        }
+          {
+              key: "number",
+              text: "No",
+              position: 1,
+              width: "10%"
+          },
+          {
+              key: "name",
+              text: "Automation Name",
+              position: 2,
+              variant: "anchor",
+              width: "35%",  
+              truncate: false,  
+              wrapText: true
+          },
+          {
+              key: "type",
+              text: "Type",
+              position: 3,
+              width: "15%"
+          },
+          {
+              key: "description",
+              text: "Description",
+              position: 4,
+              width: "25%",
+              truncate: false,
+              wrapText: true
+          },
+          {
+              key: "last_modified",
+              text: "Last Modified",
+              position: 5,
+              width: "15%"
+          }
       ];
 
       // Calculate the items to show for the current page
       const start = (page - 1) * itemsPerPage;
       const end = start + itemsPerPage;
       dataTable.rows = dataRows.slice(start, end);
-
 
       list.appendChild(dataTable);
   }
@@ -184,19 +225,38 @@ function fetchAndStoreActiveRules(domain, api_key) {
       columns: [
           {
               key: "number",
-              text: "#",
+              text: "No",
               position: 1,
               width: "10%"
           },
           {
               key: "name",
-              text: "Automations",
+              text: "Automation Name",
               position: 2,
               variant: "anchor",
-              width: "70%",          // A reasonable width
-              wrapText: true,        // Allow wrapping
-              truncate: false,       // Avoid ellipsis
-              resizable: true 
+              width: "35%",  
+              truncate: false,  
+              wrapText: true
+          },
+          {
+              key: "type",
+              text: "Type",
+              position: 3,
+              width: "15%"
+          },
+          {
+              key: "description",
+              text: "Description",
+              position: 4,
+              width: "25%",
+              truncate: false,
+              wrapText: true
+          },
+          {
+              key: "last_modified",
+              text: "Last Modified",
+              position: 5,
+              width: "15%"
           }
       ]
   };
@@ -241,7 +301,11 @@ function fetchAndStoreActiveRules(domain, api_key) {
                               text: rule.name,
                               href: `https://${domain}.freshdesk.com/a/admin/automations/${typeName}/${rule.id}/edit`,
                               target: "_blank"
-                          }
+                          },
+                          type: typeName,
+                          status: rule.active ? "Active" : "Inactive",
+                          description: rule.description || "No description available",
+                          last_modified: rule.updated_at ? new Date(rule.updated_at).toLocaleDateString() : "N/A"
                       });
 
                       hasInactiveRules = true;
@@ -252,6 +316,8 @@ function fetchAndStoreActiveRules(domain, api_key) {
                           automation_type,
                           status: rule.active,
                           type_name: typeName,
+                          description: rule.description,
+                          updated_at: rule.updated_at
                       });
                   }
               });
@@ -297,10 +363,6 @@ function fetchAndStoreActiveRules(domain, api_key) {
       const start = (page - 1) * itemsPerPage;
       const end = start + itemsPerPage;
       dataTable.rows = dataRows.slice(start, end);
-
-      // dataTable.setAttribute("is-selectable", "true");
-      // dataTable.setAttribute("is-all-selectable", "true");
-      dataTable.setAttribute("id", "data_table");
 
       list.appendChild(dataTable);
   }
@@ -364,7 +426,9 @@ function turnOffAll() {
       location.reload();
       }
     })
-    
+    .catch((error) => {
+      handleError("❌ Error turning on automation rules:", error);
+    });
 
     
   }else{
