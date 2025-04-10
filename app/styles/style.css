@@ -32,6 +32,11 @@ fw-text#heading{
   color: #666 !important; 
 
 }
-fw-custom-cell-anchor{
-  width: 100%;
+
+fw-custom-cell-anchor {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  display: block !important;
+  max-width: none !important;
 }

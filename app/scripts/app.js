@@ -50,7 +50,7 @@ function fetchAutomations() {
                     columns: [
                         {
                             key: "number",
-                            text: "No",
+                            text: "#",
                             position: 1,
                             width: "10%"
                         },
@@ -59,9 +59,10 @@ function fetchAutomations() {
                             text: "Automations",
                             position: 2,
                             variant: "anchor",
-                            width: "90%",  
-                            truncate: false,  
-                            wrapText: true
+                            width: "70%",          // A reasonable width
+                            wrapText: true,        // Allow wrapping
+                            truncate: false,       // Avoid ellipsis
+                            resizable: true    
                         }
                     ],
                     rows: []
@@ -93,7 +94,7 @@ function fetchAutomations() {
                     message.style.display = "none";
                     client.interface.trigger("showNotify", {
                         type: "info",
-                        message: "Automations checked—none disabled for this account. History has also been removed. Please try now."
+                        message: "Automations checked & none disabled for this account. History has also been removed. Please try now."
                     });
 
                     client.db.delete("automation_rules")
@@ -121,21 +122,22 @@ function fetchAutomations() {
 
       const dataTable = document.createElement("fw-data-table");
       dataTable.columns = [
-          {
-              key: "number",
-              text: "No",
-              position: 1,
-              width: "10%"
-          },
-          {
-              key: "name",
-              text: "Automations",
-              position: 2,
-              variant: "anchor",
-              width: "100%",  
-              truncate: false,  
-              wrapText: true
-          }
+        {
+          key: "number",
+          text: "#",
+          position: 1,
+          width: "10%"
+        },
+        {
+          key: "name",
+          text: "Automation Rule Name",
+          position: 2,
+          variant: "anchor",
+          width: "70%",          // A reasonable width
+          wrapText: true,        // Allow wrapping
+          truncate: false,       // Avoid ellipsis
+          resizable: true        // Optional: allow column resize
+        }
       ];
 
       // Calculate the items to show for the current page
@@ -143,8 +145,6 @@ function fetchAutomations() {
       const end = start + itemsPerPage;
       dataTable.rows = dataRows.slice(start, end);
 
-      // dataTable.setAttribute("is-selectable", "true");
-      // dataTable.setAttribute("is-all-selectable", "true");
 
       list.appendChild(dataTable);
   }
@@ -184,7 +184,7 @@ function fetchAndStoreActiveRules(domain, api_key) {
       columns: [
           {
               key: "number",
-              text: "No",
+              text: "#",
               position: 1,
               width: "10%"
           },
@@ -193,9 +193,10 @@ function fetchAndStoreActiveRules(domain, api_key) {
               text: "Automations",
               position: 2,
               variant: "anchor",
-              width: "90%",  
-              truncate: false,  
-              wrapText: true
+              width: "70%",          // A reasonable width
+              wrapText: true,        // Allow wrapping
+              truncate: false,       // Avoid ellipsis
+              resizable: true 
           }
       ]
   };
