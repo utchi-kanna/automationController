@@ -1,89 +1,175 @@
+const itemsPerPage = 10;
+
 let client;
+let state = {
+    hasInactiveRules: false,
+    dataRows: [],
+    currentPage: 1
+};
 
 function handleError(message, error) {
-  console.error(message, error); 
+    console.error(message, error);
+    if (client && client.interface) {
+        client.interface.trigger("showNotify", {
+            type: "error",
+            message: `${message} ${error?.message || ''}`
+        });
+    }
 }
 
-app.initialized()
-  .then((_client) => {
-    client = _client;
-  })
-  .catch((error) => {
-    handleError("❌ Error initializing app:", error);
-  });
+function initializeApp() {
+    return app.initialized()
+        .then((_client) => {
+            client = _client;
+            return client;
+        })
+        .catch((error) => {
+            handleError(" Error initializing app:", error);
+            throw error;
+        });
+}
+
+function validateInputs(domain, api_key) {
+    if (!domain || !api_key) {
+        if (client && client.interface) {
+            client.interface.trigger("showNotify", {
+                type: "warning",
+                message: "⚠️ Please enter both domain and API key."
+            });
+        }
+        return false;
+    }
+    return true;
+}
+
+function resetState() {
+    state = {
+        hasInactiveRules: false,
+        dataRows: [],
+        currentPage: 1
+    };
+}
+
+function createTableColumns() {
+    return [
+        {
+            key: "number",
+            text: "No",
+            position: 1,
+            width: "10%"
+        },
+        {
+            key: "name",
+            text: "Automation Name",
+            position: 2,
+            variant: "anchor",
+            width: "35%",  
+            truncate: false,  
+            wrapText: true
+        },
+        {
+            key: "type",
+            text: "Type",
+            position: 3,
+            width: "15%"
+        },
+        {
+            key: "description",
+            text: "Description",
+            position: 4,
+            width: "25%",
+            truncate: false,
+            wrapText: true
+        },
+        {
+            key: "last_modified",
+            text: "Last Modified",
+            position: 5,
+            width: "15%"
+        }
+    ];
+}
+
+function createRow(rule, index, domain, typeName) {
+    return {
+        number: index,
+        name: {
+            text: rule.name,
+            href: `https://${domain}.freshdesk.com/a/admin/automations/${typeName}/${rule.id}/edit`,
+            target: "_blank"
+        },
+        type: typeName,
+        description: rule.description || "No description available",
+        last_modified: rule.updated_at ? new Date(rule.updated_at).toLocaleDateString() : "N/A"
+    };
+}
+
+function renderTable(page, list, columns) {
+    if (!list) {
+        handleError(" List element not found", new Error("List element is required"));
+        return;
+    }
+
+    list.innerHTML = "";
+
+    const dataTable = document.createElement("fw-data-table");
+    dataTable.columns = columns;
+
+    const start = (page - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    dataTable.rows = state.dataRows.slice(start, end);
+
+    list.appendChild(dataTable);
+}
+
+function setupPagination(list, columns) {
+    if (!list) {
+        handleError(" List element not found", new Error("List element is required"));
+        return;
+    }
+
+    const pagination = document.createElement("fw-pagination");
+    pagination.setAttribute("per-page", itemsPerPage);
+    pagination.setAttribute("total", state.dataRows.length);
+
+    pagination.addEventListener("fwChange", (event) => {
+        state.currentPage = event.detail.page;
+        renderTable(state.currentPage, list, columns);
+    });
+
+    list.after(pagination);
+    renderTable(state.currentPage, list, columns);
+}
 
 function fetchAutomations() {
-    const domain = document.getElementById("domain").value.trim();
-    const api_key = document.getElementById("api_key").value.trim();
+    const domain = document.getElementById("domain")?.value?.trim();
+    const api_key = document.getElementById("api_key")?.value?.trim();
     const btn = document.getElementById("turnOffBtn");
     const message = document.getElementById("titleActiveOn");
     const list = document.getElementById("automation-list");
 
-    let dataRows = []; // Store all automation rules for pagination
-    const itemsPerPage = 10;
-    let currentPage = 1;
-
-    if (!domain || !api_key) {
-        client.interface.trigger("showNotify", {
-            type: "warning",
-            message: "⚠️ Please enter both domain and API key."
-        });
-        return;
-    }
-
     if (!client) {
-        handleError("❌ Client not initialized properly.");
+        return initializeApp()
+            .then(() => fetchAutomations())
+            .catch((error) => {
+                handleError(" Client not initialized properly:", error);
+            });
+    }
+
+    if (!validateInputs(domain, api_key)) {
         return;
     }
 
-    client.db.get("automation_rules")
-        .then((data) => {
+    resetState();
 
+    return client.db.get("automation_rules")
+        .then((data) => {
             if (data && data.domain === domain) {
                 message.style.display = "block";
-
                 const storedRules = data.rules || [];
-                let hasInactiveRules = false;
 
-                // Define table columns
                 const col = {
-                    columns: [
-                        {
-                            key: "number",
-                            text: "No",
-                            position: 1,
-                            width: "10%"
-                        },
-                        {
-                            key: "name",
-                            text: "Automation Name",
-                            position: 2,
-                            variant: "anchor",
-                            width: "35%",  
-                            truncate: false,  
-                            wrapText: true
-                        },
-                        {
-                            key: "type",
-                            text: "Type",
-                            position: 3,
-                            width: "15%"
-                        },
-                        {
-                            key: "description",
-                            text: "Description",
-                            position: 4,
-                            width: "25%",
-                            truncate: false,
-                            wrapText: true
-                        },
-                        {
-                            key: "last_modified",
-                            text: "Last Modified",
-                            position: 5,
-                            width: "15%"
-                        }
-                    ],
+                    columns: createTableColumns(),
                     rows: []
                 };
 
@@ -91,26 +177,15 @@ function fetchAutomations() {
 
                 storedRules.forEach((rule) => {
                     if (!rule.status) {
-                        const row = {
-                            number: index++,  
-                            name: {
-                                text: rule.name,
-                                href: `https://${domain}.freshdesk.com/a/admin/automations/${rule.type_name}/${rule.id}/edit`,
-                                target: "_blank"
-                            },
-                            type: rule.type_name,
-                            status: rule.status ? "Active" : "Inactive",
-                            description: rule.description || "No description available",
-                            last_modified: rule.updated_at ? new Date(rule.updated_at).toLocaleDateString() : "N/A"
-                        };
+                        const row = createRow(rule, index++, domain, rule.type_name);
                         col.rows.push(row);
-                        hasInactiveRules = true;
+                        state.hasInactiveRules = true;
                     }
                 });
 
-                if (hasInactiveRules) {
-                    dataRows = col.rows; //  Store the rows for pagination
-                    setupPagination();   //  Initiate pagination
+                if (state.hasInactiveRules) {
+                    state.dataRows = col.rows;
+                    setupPagination(list, col.columns);
                     btn.innerHTML = "Turn On All";
                     btn.disabled = false;
                 } else {
@@ -120,277 +195,128 @@ function fetchAutomations() {
                         message: "Automations checked—none disabled for this account. History has also been removed. Please try now."
                     });
 
-                    client.db.delete("automation_rules")
-                    .then(() => {
-                        location.reload();
-                    })
-                    .catch((error) => {
-                      handleError("❌ Error while deleting automation rules", error);
-                    })
-
-                    btn.disabled = true;
+                    return client.db.delete("automation_rules")
+                        .then(() => {
+                            location.reload();
+                        })
+                        .catch((error) => {
+                            handleError("Error while deleting automation rules", error);
+                        });
                 }
             } else {
-                fetchAndStoreActiveRules(domain, api_key);
+                return fetchAndStoreActiveRules(domain, api_key, list);
             }
         })
         .catch((error) => {
-            handleError("❌ Error retrieving stored rules:", error);
-            fetchAndStoreActiveRules(domain, api_key);
+            handleError("Error retrieving stored rules:", error);
+            return fetchAndStoreActiveRules(domain, api_key, list);
         });
-
-  // Function to Render Data Table with Pagination
-  function renderTable(page) {
-      list.innerHTML = ""; // Clear previous content
-
-      const dataTable = document.createElement("fw-data-table");
-      dataTable.columns = [
-          {
-              key: "number",
-              text: "No",
-              position: 1,
-              width: "10%"
-          },
-          {
-              key: "name",
-              text: "Automation Name",
-              position: 2,
-              variant: "anchor",
-              width: "35%",  
-              truncate: false,  
-              wrapText: true
-          },
-          {
-              key: "type",
-              text: "Type",
-              position: 3,
-              width: "15%"
-          },
-          {
-              key: "description",
-              text: "Description",
-              position: 4,
-              width: "25%",
-              truncate: false,
-              wrapText: true
-          },
-          {
-              key: "last_modified",
-              text: "Last Modified",
-              position: 5,
-              width: "15%"
-          }
-      ];
-
-      // Calculate the items to show for the current page
-      const start = (page - 1) * itemsPerPage;
-      const end = start + itemsPerPage;
-      dataTable.rows = dataRows.slice(start, end);
-
-      list.appendChild(dataTable);
-  }
-
-  // Function to Setup Pagination
-  function setupPagination() {
-      const pagination = document.createElement("fw-pagination");
-      pagination.setAttribute("per-page", itemsPerPage);
-      pagination.setAttribute("total", dataRows.length);
-
-      pagination.addEventListener("fwChange", (event) => {
-          currentPage = event.detail.page;
-          renderTable(currentPage);
-      });
-
-      list.after(pagination); // Add pagination below the table
-
-      renderTable(currentPage); // Initial Render
-  }
 }
 
-function fetchAndStoreActiveRules(domain, api_key) {
-  const automationTypes = [1, 3, 4];
-  const title = document.getElementById("titleActiveOff");
-  const offBtn = document.getElementById("turnOffBtn");
-  const list = document.getElementById("automation-list");
+function fetchAndStoreActiveRules(domain, api_key, list) {
+    const automationTypes = [1, 3, 4];
+    const title = document.getElementById("titleActiveOff");
+    const offBtn = document.getElementById("turnOffBtn");
 
-  offBtn.disabled = true;
+    if (!client) {
+        return initializeApp()
+            .then(() => fetchAndStoreActiveRules(domain, api_key, list))
+            .catch((error) => {
+                handleError("Client not initialized properly:", error);
+            });
+    }
 
-  const automationRules = [];
-  const dataRows = []; // Store all automation rules for pagination
-  let hasInactiveRules = false;
-  const itemsPerPage = 10; // Define globally
-  let currentPage = 1;
+    offBtn.disabled = true;
+    resetState();
 
-  const col = {
-      columns: [
-          {
-              key: "number",
-              text: "No",
-              position: 1,
-              width: "10%"
-          },
-          {
-              key: "name",
-              text: "Automation Name",
-              position: 2,
-              variant: "anchor",
-              width: "35%",  
-              truncate: false,  
-              wrapText: true
-          },
-          {
-              key: "type",
-              text: "Type",
-              position: 3,
-              width: "15%"
-          },
-          {
-              key: "description",
-              text: "Description",
-              position: 4,
-              width: "25%",
-              truncate: false,
-              wrapText: true
-          },
-          {
-              key: "last_modified",
-              text: "Last Modified",
-              position: 5,
-              width: "15%"
-          }
-      ]
-  };
-  
-  let index = 1;
-  
-  const typeMapping = {
-      1: "ticket_creation",
-      3: "time_triggers",
-      4: "ticket_updates",
-  };
-  
-  // Process all automation types in parallel and accumulate data
-  Promise.all(
-      automationTypes.map((automation_type) =>
-          client.request.invokeTemplate("getAutomations", {
-              context: { domain, api_key, automation_type }
-          })
-          .then((response) => {
+    const automationRules = [];
+    const col = {
+        columns: createTableColumns()
+    };
+    
+    let index = 1;
+    
+    const typeMapping = {
+        1: "ticket_creation",
+        3: "time_triggers",
+        4: "ticket_updates",
+    };
+    
+    return Promise.all(
+        automationTypes.map((automation_type) =>
+            client.request.invokeTemplate("getAutomations", {
+                context: { domain, api_key, automation_type }
+            })
+            .then((response) => {
+                let rules;
+                try {
+                    rules = JSON.parse(response.response);
+                } catch (error) {
+                    handleError(" Error parsing JSON:", error);
+                    return;
+                }
 
-              let rules;
-              try {
-                  rules = JSON.parse(response.response);
-              } catch (error) {
-                  handleError("❌ Error parsing JSON:", error);
-                  return;
-              }
+                if (rules.automation_rules) {
+                    rules = rules.automation_rules;
+                }
 
-              if (rules.automation_rules) {
-                  rules = rules.automation_rules;
-              }
+                if (!rules || !rules.length) return;
 
-              if (!rules.length) return;
+                const typeName = typeMapping[automation_type] || "unknown";
 
-              const typeName = typeMapping[automation_type] || "unknown";
+                rules.forEach((rule) => {
+                    if (rule.active === true) {
+                        const row = createRow(rule, index++, domain, typeName);
+                        state.dataRows.push(row);
+                        state.hasInactiveRules = true;
 
-              rules.forEach((rule) => {
-                  if (rule.active === true) {
-                      dataRows.push({
-                          number: index++,  
-                          name: {
-                              text: rule.name,
-                              href: `https://${domain}.freshdesk.com/a/admin/automations/${typeName}/${rule.id}/edit`,
-                              target: "_blank"
-                          },
-                          type: typeName,
-                          status: rule.active ? "Active" : "Inactive",
-                          description: rule.description || "No description available",
-                          last_modified: rule.updated_at ? new Date(rule.updated_at).toLocaleDateString() : "N/A"
-                      });
+                        automationRules.push({
+                            id: rule.id,
+                            name: rule.name,
+                            automation_type,
+                            status: rule.active,
+                            type_name: typeName,
+                            description: rule.description,
+                            updated_at: rule.updated_at
+                        });
+                    }
+                });
+            })
+            .catch((error) => {
+                handleError(" Error fetching automation rules:", error);
+            })
+        )
+    )
+    .then(() => {
+        if (!state.hasInactiveRules) {
+            client.interface.trigger("showNotify", {
+                type: "info",
+                message: "There are no active automations in this account"
+            });
+            return;
+        }
 
-                      hasInactiveRules = true;
+        setupPagination(list, col.columns);
+        title.style.display = "block";
+        offBtn.disabled = false;
 
-                      automationRules.push({
-                          id: rule.id,
-                          name: rule.name,
-                          automation_type,
-                          status: rule.active,
-                          type_name: typeName,
-                          description: rule.description,
-                          updated_at: rule.updated_at
-                      });
-                  }
-              });
-          })
-          .catch((error) => {
-              handleError("❌ Error fetching automation rules:", error);
-          })
-      )
-  ).then(() => {
-    if (!hasInactiveRules) {
-      client.interface.trigger("showNotify", {
-          type: "info",
-          message: "There are no active automations in this account"
-      });
-      return; 
-  }
-
-      setupPagination(); // Initiate pagination
-      title.style.display = "block";
-      offBtn.disabled = false;
-
-      return client.db.set("automation_rules", { domain, rules: automationRules })
-      .catch((error) => {
-        handleError("Error saving automation rules to DB:", error);
-        client.interface.trigger("showNotify", {
-          type: "error",
-          message: "Something went wrong while saving automation rules."
-        });
-      });
-  })
-  .catch((error) => {
-    handleError("Something went wrong", error)
-  })
-
-  // Function to Render Data Table with Pagination
-  function renderTable(page) {
-      list.innerHTML = ""; // Clear previous content
-
-      const dataTable = document.createElement("fw-data-table");
-      dataTable.columns = col.columns;
-
-      // Calculate the items to show for the current page
-      const start = (page - 1) * itemsPerPage;
-      const end = start + itemsPerPage;
-      dataTable.rows = dataRows.slice(start, end);
-
-      list.appendChild(dataTable);
-  }
-
-  // Function to Setup Pagination
-  function setupPagination() {
-      const pagination = document.createElement("fw-pagination");
-      pagination.setAttribute("per-page", itemsPerPage);
-      pagination.setAttribute("total", dataRows.length);
-
-      pagination.addEventListener("fwChange", (event) => {
-          currentPage = event.detail.page;
-          renderTable(currentPage);
-      });
-
-      list.after(pagination);
-
-      renderTable(currentPage); // Initial Render
-  }
+        return client.db.set("automation_rules", { domain, rules: automationRules })
+            .catch((error) => {
+                handleError("Error saving automation rules to DB:", error);
+            });
+    })
+    .catch((error) => {
+        handleError("Something went wrong", error);
+    });
 }
 
 function turnOffAll() {
   const domain = document.getElementById("domain").value.trim();
   const buttonText = document.getElementById("turnOffBtn").textContent;
-  // const dataTable = document.getElementById("data_table");
+  
 
   if (!client?.db) {
-    handleError("❌ Client database API is not available.");
+    handleError(" Client database API is not available.");
     return;
   }
   
@@ -399,14 +325,11 @@ function turnOffAll() {
     .get("automation_rules")
     .then((data) => {
       if (!data || !data.domain || data.domain !== domain) {
-        throw new Error("❌ No stored automation rules found for this domain.");
+        throw new Error("No stored automation rules found for this domain.");
       }
 
       const storedRules = data.rules || [];
-      if (storedRules.length === 0) {
-        console.warn("⚠️ No automation rules found to disable.");
-        return;
-      }
+    
       const body = { active: true };
       return Promise.all(
         storedRules.map((rule) =>
@@ -427,10 +350,8 @@ function turnOffAll() {
       }
     })
     .catch((error) => {
-      handleError("❌ Error turning on automation rules:", error);
+      handleError(" Error turning on automation rules:", error);
     });
-
-    
   }else{
     // Turn off section
 
@@ -438,14 +359,10 @@ function turnOffAll() {
     .get("automation_rules")
     .then((data) => {
       if (!data || !data.domain || data.domain !== domain) {
-        throw new Error("❌ No stored automation rules found for this domain.");
+        throw new Error(" No stored automation rules found for this domain.");
       }
 
       const storedRules = data.rules || [];
-      if (storedRules.length === 0) {
-        console.warn("⚠️ No automation rules found to disable.");
-        return;
-      }
       const body = { active: false };
       return Promise.all(
         storedRules.map((rule) =>
@@ -474,10 +391,6 @@ function turnOffAll() {
             
           }).then(() => client.db.get("automation_rules"))
           .then((updatedData) => {
-              if (!updatedData || !updatedData.rules.length) {
-                  handleError("❌ No automation rules found for CSV.");
-                  return;
-              }
               
 
               const csvContent = generateCSV(updatedData.rules, updatedData.domain);
@@ -486,7 +399,7 @@ function turnOffAll() {
               downloadCSV(csvContent, "disabled_automation_rules.csv");
 
           })
-          .catch((error) => handleError("❌ Error updating entity:", error));
+          .catch((error) => handleError(" Error updating entity:", error));
   
       client.interface.trigger("showNotify", {
         type: "success",
@@ -498,7 +411,7 @@ function turnOffAll() {
       }
     })
     .catch((error) => {
-      handleError("❌ Error disabling automation rules:", error);
+      handleError(" Error disabling automation rules:", error);
     });
   }
 
@@ -534,4 +447,9 @@ function downloadCSV(csvContent, filename) {
 
   document.body.removeChild(link);
 }
+
+// Initialize the app when the script loads
+initializeApp().catch((error) => {
+    handleError(" Failed to initialize app:", error);
+});
 
