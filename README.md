@@ -1,14 +1,16 @@
 # 🧩 Freshdesk Automation Rules Controller – Marketplace App
 
-This is a full-page Freshdesk Marketplace app that lists all automation rules in your Freshdesk account. It provides a paginated, searchable table using Crayons UI components and the Freshdesk API.
+This app helps Freshdesk users to manage all active automation rules in one place
 
 
 ## ✨ Features
 
-- 🔍 List all automation rules 
-- 📄 Paginated and searchable table
-- 🎨 Responsive UI built with Crayons (Freshworks Design System)
-- ⚙️ Easy integration with your Freshdesk domain and API key
+- 🔍 View all automation rules (Ticket Creation + Observer)
+- 📄 Paginated & searchable table
+- 🔕 One-click disable: Turn off selected automations in bulk
+- 📤 Export: Automatically generates a downloadable sheet of disabled automations
+- 🎨 Responsive UI with Crayons components
+- 🔐 API key secured via iparams
 
 
 ## 🛠 Tech Stack
