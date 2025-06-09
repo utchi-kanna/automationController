@@ -1,4 +1,4 @@
-# 🧩 Freshdesk Automation Rules Viewer – Marketplace App
+# 🧩 Freshdesk Automation Rules Controller – Marketplace App
 
 This is a full-page Freshdesk Marketplace app that lists all automation rules in your Freshdesk account. It provides a paginated, searchable table using Crayons UI components and the Freshdesk API.
 
