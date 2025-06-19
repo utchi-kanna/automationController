@@ -1,0 +1,15 @@
+{
+  "name": "automation-controller",
+  "version": "1.0.0",
+  "description": "Freshworks Automation Controller App",
+  "scripts": {
+    "test": "mocha app/test/**/*.test.js",
+    "test:coverage": "nyc mocha app/test/**/*.test.js"
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "nyc": "^15.1.0",
+    "sinon": "^15.1.0"
+  }
+} 

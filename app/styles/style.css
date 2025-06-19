@@ -17,19 +17,19 @@ html {
 fw-text#titleActiveOff {
   font-size: 1.1rem !important; /* h1 size */
   font-weight: bold !important;
-  color: #666 !important; 
+  color: #000000c9 !important; 
 }
 
 fw-text#titleActiveOn {
   font-size: 1.1rem !important; /* h2 size */
   font-weight: bold !important;
-  color: #666 !important; 
+  color: #000000c9 !important; 
 }
 
 fw-text#heading{
   font-size: 1.3rem !important;
   font-weight: bold !important;
-  color: #666 !important; 
+  color: #000000c9 !important; 
 
 }
 
