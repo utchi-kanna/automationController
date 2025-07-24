@@ -47,9 +47,9 @@
     }
   },
   "engines": {
-  "node": "18.20.7",
-  "fdk": "9.3.1"
-},
+    "node": "18.12.1",
+    "fdk": "9.5.2"
+  },
   "app": {
     "tracking_id": "0713asbjk6h8so4wip3m"
   }
