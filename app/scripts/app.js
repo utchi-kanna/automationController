@@ -1,6 +1,7 @@
 // Global state and configuration
 let appClient;
 const automationTableData = [];
+const selectedAutomations = new Set();
 const PAGINATION_CONFIG = {
   itemsPerPage: 10,
   currentPage: 1
@@ -18,27 +19,51 @@ const AUTOMATION_TYPE_MAPPING = {
   [AUTOMATION_TYPES.TICKET_UPDATES]: 'ticket_updates'
 };
 
-// Error handling utility
-function showNotification(type, message) {
-  console.log(`${type.toUpperCase()}: ${message}`);
-  if (appClient?.interface) {
-    appClient.interface.trigger('showNotify', { type, message });
-  }
+// Global error handler
+function handleGlobalError(error, context) {
+  const errorMessage = context ? `${context}: ${error?.message || error}` : error?.message;
+  showNotification('error', errorMessage);
 }
 
-function handleError(message, error) {
-  const errorMessage = `${message} ${error?.message || error}`;
-  console.error(errorMessage, error);
-  showNotification('error', errorMessage);
+// Simple validation functions for easy testing
+function isValidString(str) {
+  return typeof str === 'string' && str.length > 0;
+}
+
+function isPositiveNumber(num) {
+  return typeof num === 'number' && num > 0;
+}
+
+function hasValidId(rule) {
+  return rule && rule.id && rule.id > 0;
+}
+
+function isAutomationType(type) {
+  return type === 'ticket_creation' || type === 'ticket_updates' || type === 'time_triggers';
+}
+
+function shouldShowNotification(type) {
+  return type === 'error' || type === 'warning' || type === 'success' || type === 'info';
+}
+
+function isRuleActive(rule) {
+  return rule && rule.active === true;
+}
+
+function hasDescription(rule) {
+  return rule && rule.description && rule.description.trim().length > 0;
+}
+
+// Notification utility
+function showNotification(type, message) {
+  if (isValidString(message) && shouldShowNotification(type)) {
+    appClient?.interface?.trigger('showNotify', { type, message });
+  }
 }
 
 // Initialize app client
 async function initializeApp() {
-  try {
-    appClient = await app.initialized();
-  } catch (error) {
-    handleError('❌ Error initializing app:', error);
-  }
+  appClient = await app.initialized();
 }
 
 // Table configuration
@@ -115,20 +140,108 @@ const dataOperations = {
   }
 };
 
+// Selection and filtering utilities
+const selectionHelpers = {
+  updateSelectionInfo() {
+    const selectionInfo = document.getElementById('selectionInfo');
+    const visibleCount = selectionHelpers.getVisibleAutomations().length;
+    const selectedCount = selectedAutomations.size;
+    selectionInfo.textContent = `Selected: ${selectedCount} of ${visibleCount}`;
+  },
+
+  isAutomationVisible(automation) {
+    // Check if we're in disabled mode (showing only disabled automations)
+    const titleActiveOn = document.getElementById('titleActiveOn');
+    const isDisabledMode = titleActiveOn.style.display === 'block';
+    
+    if (isDisabledMode) {
+      return true; // When showing disabled automations, show all of them regardless of filters
+    }
+    
+    // Validate automation type
+    if (!isAutomationType(automation.type)) {
+      return false;
+    }
+    
+    // When showing active automations, apply filters
+    const filterMap = {
+      'ticket_creation': document.getElementById('filterTicketCreation').checked,
+      'ticket_updates': document.getElementById('filterTicketUpdate').checked,
+      'time_triggers': document.getElementById('filterHourly').checked
+    };
+    
+    return filterMap[automation.type] !== false;
+  },
+
+  getVisibleAutomations() {
+    return automationTableData.filter(automation => this.isAutomationVisible(automation));
+  },
+
+
+  setupFilterListeners() {
+    const filterCheckboxes = ['filterTicketCreation', 'filterTicketUpdate', 'filterHourly'];
+
+    filterCheckboxes.forEach(id => {
+      const checkbox = document.getElementById(id);
+      if (checkbox) {
+        checkbox.addEventListener('fwChange', () => {
+          PAGINATION_CONFIG.currentPage = 1;
+          
+          // Auto-select all visible automations when filters change
+          const visibleAutomations = this.getVisibleAutomations();
+          selectedAutomations.clear();
+          visibleAutomations.forEach(automation => selectedAutomations.add(automation.id.toString()));
+          
+          uiHelpers.renderTable(PAGINATION_CONFIG.currentPage, document.getElementById('automation-list'));
+          this.updateSelectionInfo();
+        });
+      }
+    });
+  },
+
+  updateButtonStates(isDisabledMode) {
+    const disableBtn = document.getElementById('disableSelectedBtn');
+    const enableBtn = document.getElementById('enableSelectedBtn');
+    const filterCheckboxes = [
+      document.getElementById('filterTicketCreation'),
+      document.getElementById('filterTicketUpdate'),
+      document.getElementById('filterHourly')
+    ];
+
+    // Set button states based on mode
+    if (disableBtn) disableBtn.disabled = isDisabledMode;
+    if (enableBtn) enableBtn.disabled = !isDisabledMode;
+    
+    // Set filter checkbox states based on mode
+    filterCheckboxes.forEach(checkbox => {
+      if (checkbox) checkbox.disabled = isDisabledMode;
+    });
+  }
+};
+
 // Table and UI utilities
 const uiHelpers = {
   createTableRowsFromRules(rules, domain) {
-    return rules.map((rule, index) => ({
-      number: index + 1,
-      name: {
-        text: rule.name,
-        href: `https://${domain}/a/admin/automations/${rule.type_name}/${rule.id}/edit`,
-        target: '_blank'
-      },
-      type: rule.type_name,
-      description: rule.description,
-      lastModified: rule.updated_at
-    }));
+    return rules.map((rule, index) => {
+      const typeKey = rule.type_name 
+      const safeDescription = hasDescription(rule) ? rule.description.trim() : 'No description available';
+      const safeUpdatedAt = rule.updated_at.toString();
+      
+      return {
+        id: rule.id,
+        number: index + 1,
+        name: {
+          text: rule.name,
+          href: `https://${domain}/a/admin/automations/${typeKey}/${rule.id}/edit`,
+          target: '_blank'
+        },
+        type: typeKey,
+        description: safeDescription,
+        lastModified: safeUpdatedAt,
+        isValid: hasValidId(rule),
+        isActive: isRuleActive(rule)
+      };
+    });
   },
 
   setupPaginationAndRenderTable(container) {
@@ -149,16 +262,32 @@ const uiHelpers = {
     this.renderTable(PAGINATION_CONFIG.currentPage, container);
   },
 
+  updatePagination(container) {
+    const existingPagination = container.nextElementSibling;
+    if (existingPagination?.tagName === 'FW-PAGINATION') {
+      const visibleCount = selectionHelpers.getVisibleAutomations().length;
+      existingPagination.setAttribute('total', visibleCount);
+    }
+  },
+
   renderTable(page, container) {
     container.innerHTML = '';
     const dataTable = document.createElement('fw-data-table');
     dataTable.columns = createAutomationTableColumns();
 
+    // Filter visible automations
+    const visibleAutomations = selectionHelpers.getVisibleAutomations();
+    
     const startIndex = (page - 1) * PAGINATION_CONFIG.itemsPerPage;
     const endIndex = startIndex + PAGINATION_CONFIG.itemsPerPage;
-    dataTable.rows = automationTableData.slice(startIndex, endIndex);
+    dataTable.rows = visibleAutomations.slice(startIndex, endIndex);
 
     container.appendChild(dataTable);
+
+    // Update pagination to reflect filtered count
+    this.updatePagination(container);
+
+    selectionHelpers.updateSelectionInfo();
   },
 
   generateCSVAndDownload(rules, domain, filename) {
@@ -183,197 +312,221 @@ const uiHelpers = {
   }
 };
 
-// Main automation management logic
-async function fetchAutomations() {
-  try {
-    await initializeApp();
+// Helper functions for fetchAutomations
+function setupUIForDisabledMode(inactiveRules, domain, container, controls) {
+  const tableRows = uiHelpers.createTableRowsFromRules(inactiveRules, domain);
+  automationTableData.length = 0;
+  automationTableData.push(...tableRows);
 
-    const turnOffButton = document.getElementById('turnOffBtn');
-    const titleActiveMessage = document.getElementById('titleActiveOn');
-    const titleActiveOff = document.getElementById('titleActiveOff');
-    const automationListContainer = document.getElementById('automation-list');
+  uiHelpers.setupPaginationAndRenderTable(container);
+  controls.classList.remove('disabled-state');
+  selectionHelpers.setupFilterListeners();
+  selectionHelpers.updateButtonStates(true);
+  
+  selectedAutomations.clear();
+  inactiveRules.forEach(rule => selectedAutomations.add(rule.id.toString()));
+  selectionHelpers.updateSelectionInfo();
+}
 
-    const iparams = await appClient.iparams.get();
-    const { domain, api_key: apiKey } = iparams;
+async function fetchAndProcessActiveAutomations(domain, apiKey) {
+  const automationTypesToFetch = [
+    AUTOMATION_TYPES.TICKET_CREATION,
+    AUTOMATION_TYPES.TIME_TRIGGERS,
+    AUTOMATION_TYPES.TICKET_UPDATES
+  ];
 
-    let storedData;
-    try {
-      storedData = await dataOperations.getStoredRules();
-    } catch (error) {
-      console.warn('No stored rules found, fetching from API');
-    }
+  const allAutomationRules = [];
+  let rowIndex = 1;
 
-    if (storedData?.domain === domain) {
-      // Display stored inactive automations
-      titleActiveMessage.style.display = 'block';
-      const inactiveRules = storedData.rules.filter((rule) => !rule.status);
+  const automationPromises = automationTypesToFetch.map(async (automationType) => {
+    const rules = await dataOperations.fetchAutomationsByType(domain, apiKey, automationType);
+    const typeName = AUTOMATION_TYPE_MAPPING[automationType];
 
-      if (inactiveRules.length > 0) {
-        const tableRows = uiHelpers.createTableRowsFromRules(
-          inactiveRules,
-          storedData.domain
-        );
+    if (rules && Array.isArray(rules)) {
+      rules.forEach((rule) => {
+        if (rule.active === true) {
+          automationTableData.push({
+            id: rule.id,
+            number: rowIndex++,
+            name: {
+              text: rule.name,
+              href: `https://${domain}/a/admin/automations/${typeName}/${rule.id}/edit`,
+              target: '_blank'
+            },
+            type: typeName,
+            description: rule.description || 'No description available',
+            lastModified: rule.updated_at
+          });
 
-        automationTableData.length = 0;
-        automationTableData.push(...tableRows);
-
-        uiHelpers.setupPaginationAndRenderTable(automationListContainer);
-        turnOffButton.innerHTML = 'Turn On All';
-        turnOffButton.disabled = false;
-      } else {
-        titleActiveMessage.style.display = 'none';
-        showNotification(
-          'info',
-          'Automations checked—none disabled for this account. History has also been removed. Please try now.'
-        );
-
-        await dataOperations.deleteRules();
-        location.reload();
-      }
-    } else {
-      // Fetch and store active automations
-      turnOffButton.disabled = true;
-      automationTableData.length = 0;
-
-      const automationTypesToFetch = [
-        AUTOMATION_TYPES.TICKET_CREATION,
-        AUTOMATION_TYPES.TIME_TRIGGERS,
-        AUTOMATION_TYPES.TICKET_UPDATES
-      ];
-
-      const allAutomationRules = [];
-      let rowIndex = 1;
-
-      const automationPromises = automationTypesToFetch.map(
-        async (automationType) => {
-          const rules = await dataOperations.fetchAutomationsByType(
-            domain,
-            apiKey,
-            automationType
-          );
-          const typeName = AUTOMATION_TYPE_MAPPING[automationType];
-
-          rules.forEach((rule) => {
-            if (rule.active === true) {
-              automationTableData.push({
-                number: rowIndex++,
-                name: {
-                  text: rule.name,
-                  href: `https://${domain}/a/admin/automations/${typeName}/${rule.id}/edit`,
-                  target: '_blank'
-                },
-                type: typeName,
-                description: rule.description,
-                lastModified: rule.updated_at
-              });
-
-              allAutomationRules.push({
-                id: rule.id,
-                name: rule.name,
-                automation_type: automationType,
-                status: rule.active,
-                type_name: typeName,
-                description: rule.description,
-                updated_at: rule.updated_at
-              });
-            }
+          allAutomationRules.push({
+            id: rule.id,
+            name: rule.name,
+            automation_type: automationType,
+            status: rule.active,
+            type_name: typeName,
+            description: rule.description,
+            updated_at: rule.updated_at
           });
         }
-      );
-
-      await Promise.all(automationPromises);
-
-      if (automationTableData.length === 0) {
-        showNotification(
-          'info',
-          'There are no active automations in this account'
-        );
-      } else {
-        await dataOperations.saveRules(domain, allAutomationRules);
-      }
-
-      uiHelpers.setupPaginationAndRenderTable(automationListContainer);
-      titleActiveOff.style.display = 'block';
-      turnOffButton.disabled = false;
+      });
     }
-  } catch (error) {
-    handleError('❌ Error in fetchAutomations:', error);
-  }
+  });
+
+  await Promise.all(automationPromises);
+  return allAutomationRules;
 }
 
-// Toggle automation functionality
-async function turnOffAll() {
+// Main automation management logic
+async function fetchAutomations() {
+  await initializeApp();
+  const titleActiveMessage = document.getElementById('titleActiveOn');
+  const titleActiveOff = document.getElementById('titleActiveOff');
+  const automationListContainer = document.getElementById('automation-list');
+  const selectionControls = document.getElementById('selection-controls');
+
+  const iparams = await appClient.iparams.get();
+  const { domain, api_key: apiKey } = iparams;
+
+  let storedData;
   try {
-    await initializeApp();
-
-    const turnOffButton = document.getElementById('turnOffBtn');
-    const isEnabling = turnOffButton.textContent === 'Turn On All';
-
-    const iparams = await appClient.iparams.get();
-    const { domain } = iparams;
-
-    const storedData = await dataOperations.getStoredRules();
-
-    if (!storedData?.domain || storedData.domain !== domain) {
-      throw new Error('No stored automation rules found for this domain.');
-    }
-
-    if (isEnabling) {
-      // Enable all automations
-      const enablePromises = storedData.rules.map((rule) =>
-        dataOperations.updateAutomationStatus(
-          domain,
-          rule.automation_type,
-          rule.id,
-          true
-        )
-      );
-
-      await Promise.all(enablePromises);
-      await dataOperations.deleteRules();
-
-      showNotification(
-        'success',
-        '✅ Automations have been successfully turned on, and the history has been removed.'
-      );
-      setTimeout(() => location.reload(), 500);
-    } else {
-      // Disable all automations
-      const disablePromises = storedData.rules.map((rule) =>
-        dataOperations.updateAutomationStatus(
-          domain,
-          rule.automation_type,
-          rule.id,
-          false
-        )
-      );
-
-      await Promise.all(disablePromises);
-
-      // Update stored rules status and save
-      const updatedRules = storedData.rules.map((rule) => ({
-        ...rule,
-        status: false
-      }));
-      await dataOperations.saveRules(domain, updatedRules);
-
-      // Generate and download CSV
-      uiHelpers.generateCSVAndDownload(
-        updatedRules,
-        domain,
-        'disabled_automation_rules.csv'
-      );
-
-      showNotification(
-        'success',
-        '✅ Successfully turned off! Disabled automations are being downloaded for your reference.'
-      );
-      setTimeout(() => location.reload(), 500);
-    }
+    storedData = await dataOperations.getStoredRules();
   } catch (error) {
-    handleError('❌ Error in turnOffAll operation:', error);
+    // No stored rules found, will fetch from API
+  }
+
+  if (storedData?.domain === domain) {
+    titleActiveMessage.style.display = 'block';
+    titleActiveOff.style.display = 'none';
+    const inactiveRules = storedData.rules.filter((rule) => !rule.status);
+
+    if (inactiveRules.length > 0) {
+      setupUIForDisabledMode(inactiveRules, storedData.domain, automationListContainer, selectionControls);
+    } else {
+      titleActiveMessage.style.display = 'none';
+      showNotification('info', 'Automations checked—none disabled for this account. History has also been removed. Please try now.');
+      await dataOperations.deleteRules();
+      location.reload();
+    }
+  } else {
+    automationTableData.length = 0;
+    const allAutomationRules = await fetchAndProcessActiveAutomations(domain, apiKey);
+
+    if (automationTableData.length === 0) {
+      showNotification('warning', 'No active automations found in this account. Please check your Freshdesk account for automation rules.');
+      return;
+    }
+    
+    await dataOperations.saveRules(domain, allAutomationRules);
+
+    uiHelpers.setupPaginationAndRenderTable(automationListContainer);
+    selectionControls.classList.remove('disabled-state');
+    selectionHelpers.setupFilterListeners();
+    titleActiveOff.style.display = 'block';
+    titleActiveMessage.style.display = 'none';
+    
+    selectedAutomations.clear();
+    automationTableData.forEach(automation => selectedAutomations.add(automation.id.toString()));
+    selectionHelpers.updateButtonStates(false);
+    selectionHelpers.updateSelectionInfo();
   }
 }
+
+
+
+
+
+// Common bulk operation logic
+async function performBulkOperation(isEnable, emptyMessage, successMessage) {
+  if (selectedAutomations.size === 0) {
+    showNotification('warning', emptyMessage);
+    return;
+  }
+
+  await initializeApp();
+  const iparams = await appClient.iparams.get();
+  const { domain } = iparams;
+
+  const storedData = await dataOperations.getStoredRules();
+  if (!storedData?.domain || storedData.domain !== domain) {
+    throw new Error('No stored automation rules found for this domain.');
+  }
+
+  const selectedRules = storedData.rules.filter(rule => 
+    selectedAutomations.has(rule.id.toString())
+  );
+
+  const operationPromises = selectedRules.map((rule) =>
+    dataOperations.updateAutomationStatus(domain, rule.automation_type, rule.id, isEnable)
+  );
+
+  await Promise.all(operationPromises);
+
+  const updatedRules = storedData.rules.map((rule) => ({
+    ...rule,
+    status: (selectedAutomations.has(rule.id.toString()) ? isEnable : rule.status)
+  }));
+  await dataOperations.saveRules(domain, updatedRules);
+
+  if (!isEnable) {
+    const disabledRules = selectedRules.map(rule => ({ ...rule, status: false }));
+    uiHelpers.generateCSVAndDownload(disabledRules, domain, 'disabled_selected_automation_rules.csv');
+  }
+
+  showNotification('success', successMessage);
+  selectedAutomations.clear();
+  
+  if (isEnable) {
+    const remainingDisabled = updatedRules.filter(rule => !rule.status);
+    if (remainingDisabled.length === 0) {
+      await dataOperations.deleteRules();
+      setTimeout(() => location.reload(), 500);
+      return;
+    }
+  }
+  
+  setTimeout(() => fetchAutomations(), 500);
+}
+
+// Bulk operations
+async function disableSelected() {
+  await performBulkOperation(
+    false,
+    'No active automations found to disable.',
+    'Successfully disabled automation(s). Disabled automations are being downloaded for your reference.'
+  );
+}
+
+async function enableSelected() {
+  await performBulkOperation(
+    true,
+    'Please select at least one automation to enable.',
+    'Successfully enabled automation(s)!'
+  );
+}
+
+
+
+// Global error handler wrapper
+function withErrorHandling(fn, context) {
+  return async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      handleGlobalError(error, context);
+    }
+  };
+}
+
+// Wrapped functions with error handling
+const fetchAutomationsWithErrorHandling = withErrorHandling(fetchAutomations, 'Fetch automations');
+const disableSelectedWithErrorHandling = withErrorHandling(disableSelected, 'Disable selected automations');
+const enableSelectedWithErrorHandling = withErrorHandling(enableSelected, 'Enable selected automations');
 
 // Initialize the app when the script loads
-initializeApp();
+initializeApp().catch(error => handleGlobalError(error, 'App initialization failed'));
+
+// Initialize the UI in disabled state
+document.addEventListener('DOMContentLoaded', function() {
+  const selectionControls = document.getElementById('selection-controls');
+  selectionControls?.classList.add('disabled-state');
+});
